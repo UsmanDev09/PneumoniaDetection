@@ -1,0 +1,203 @@
+import numpy as np
+import pandas as pd 
+import matplotlib.pyplot as plt
+import seaborn as sns
+import glob
+import random
+import os
+import cv2
+#tesor fow & keras
+import tensorflow as tf
+from tensorflow import keras
+from keras.regularizers import l2     
+from sklearn.utils import shuffle
+from tensorflow.keras.utils import to_categorical
+from keras.models import load_model
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Flatten, Dense,BatchNormalization,Dropout,Input
+from keras.models import Sequential, Model
+from keras.layers import Conv2D,GlobalMaxPooling2D
+from tensorflow.keras.applications import  Xception,VGG16,InceptionResNetV2
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+#cnn
+from tensorflow.keras import datasets, layers, models
+ 
+from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D, concatenate, Conv2DTranspose, BatchNormalization, Dropout, Lambda
+from keras.engine.base_layer import Layer
+from sklearn.metrics import classification_report,confusion_matrix
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import f1_score
+from sklearn.metrics import recall_score
+from sklearn.metrics import precision_score
+labels = ['NORMAL','PNEUMONIA']
+folders=['train','test','val']
+def load_images_from_directory(main_dirictory,foldername):
+    total_labels=[]
+    images=[]
+    total_normal=0
+    total_pneumonia=0
+    path = os.path.join(main_dirictory,foldername) 
+    for lab in labels :
+        full_path = os.path.join(path,lab)
+        print (' loading ....... images of folder :',foldername+'/'+lab )  
+        for image in os.listdir(full_path):
+            img = cv2.imread(full_path+'/'+image)
+            img = cv2.resize(img,(150,150))
+            print("ss",np.asarray(img))
+            images.append(img)
+            if lab  == 'NORMAL':
+                    label =0
+                    total_normal+= 1
+            elif lab == 'PNEUMONIA' :
+                    label = 1
+                    total_pneumonia +=1
+            total_labels.append(label)
+    print('total normal image := ',total_normal)
+    print('total Pneumonia    := ',total_pneumonia)
+    return shuffle(images,total_labels,random_state=756349782)
+ 
+# get label Name   
+def get_Label(number):
+    labels = {0:'NORMAL', 1:'PNEUMONIA'}
+    return labels[number]
+ 
+ 
+#plot predction function
+def plot_predection(model_name):
+    plt.figure(figsize=(20,15))
+    plt.suptitle("Predection  Images", fontsize=20)
+    images = [] 
+    count = 0  #val_images,val_labels
+    for i,files in enumerate(val_images) :
+        # img = cv2.imread(files)  
+        plt.imshow(files,cmap=plt.cm.binary)
+        img = cv2.resize(files,(150,150))
+        img = np.expand_dims(files, axis=0)
+        feature = model_name.predict(img)
+        predection  = np.argmax(feature, axis=1)
+        plt.subplot(5,6,i+1)
+        plt.xticks([])
+        plt.yticks([])
+        plt.grid(False)
+        plt.xlabel("Predected "+get_Label(int(predection)))
+        plt.ylabel(get_Label(val_labels[i]))
+        count += 1
+        if count == 30 :
+            break 
+ 
+def freezing_layers(model_name):
+    for layer in model_name.layers:
+      layer.trainable = False 
+ 
+train_images,train_labels=load_images_from_directory(train_image_path,"train")
+test_images,test_labels=load_images_from_directory(train_image_path,"test")
+val_images,val_labels=load_images_from_directory(train_image_path,"val")
+train_images  = np.asarray(train_images,np.float32)/255
+train_labels = np.asarray(train_labels)
+print('train Images shape is   : ',train_images.shape)
+print('train  Labels  shape is : ',train_labels.shape)
+test_images  = np.asarray(test_images,np.float32)/255
+test_labels = np.asarray(test_labels)
+plt.figure(figsize=(15,10))
+plt.suptitle("Train Images", fontsize=20)
+for i in range(30):
+    plt.subplot(5,6,i+1)
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    plt.xlabel(get_Label(train_labels[i]))
+    plt.imshow(train_images[i], cmap=plt.cm.binary)
+plt.title('Train Labels Visualization')
+sns.countplot(x=train_labels,palette='flare')
+plt.show()
+plt.figure(figsize=(15,10))
+plt.suptitle("Test Images", fontsize=20)
+for i in range(30):
+    plt.subplot(5,6,i+1)
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    plt.xlabel(get_Label(test_labels[i]))
+    plt.imshow(test_images[i], cmap=plt.cm.binary)
+plt.title('Test Labels Visualization')
+sns.countplot(x=test_labels,palette='flare')
+plt.show()
+train_labels = to_categorical(train_labels, 2)
+test_labels = to_categorical(test_labels, 2)
+batch_size = 16
+ 
+image_gen = ImageDataGenerator(
+                   
+                                  shear_range = 0.2,
+                                  zoom_range = 0.2,
+                                  height_shift_range=0.2,
+                                  width_shift_range=0.2,
+                                  horizontal_flip=True, 
+                                  rotation_range = 20,   
+ 
+                               )
+ 
+# Create Image Data Generator for Test/Validation Set
+test_data_gen = ImageDataGenerator()
+val_data_gen  = ImageDataGenerator()
+ 
+train = image_gen.flow(
+      train_images,
+      train_labels,
+      shuffle=True, 
+      batch_size=batch_size
+      )
+test = test_data_gen.flow(
+      test_images,
+      test_labels,
+      shuffle=True, 
+      batch_size=batch_size
+      )
+vgg_base_model = VGG16(input_shape=(150,150,3),weights='imagenet', include_top=False)
+vgg_base_model.summary()
+freezing_layers(vgg_base_model)    
+vgg_base_model.compile(optimizer='adam',loss='binary_crossentropy',metrics=['accuracy'],)
+vgg_base_model.add(vgg_base_model)
+vgg_base_model.add(layers.Flatten())
+vgg_base_model.add(layers.Dense(2048, activation='relu'))
+vgg_base_model.add(BatchNormalization())
+vgg_bae_model.add(Dropout(0.5))
+vgg_base_model.add(layers.Dense(2, activation ='sigmoid'))
+vgg_base_model.summary()
+vgg_model.compile(optimizer='adam',loss='binary_crossentropy',metrics=['accuracy'],)
+from tensorflow.keras.callbacks import EarlyStopping,ReduceLROnPlateau
+early = EarlyStopping(monitor="loss", mode="min",min_delta = 0,
+                          patience = 10,
+                          verbose = 1,
+                          restore_best_weights = True)
+learning_rate_reduction = ReduceLROnPlateau(monitor='loss', patience = 2, verbose=1,factor=0.3, min_lr=0.000001)
+callbacks_list = [ early, learning_rate_reduction]
+n_training_samples = len(train)
+n_validation_samples = len(test)
+history = vgg_base_model.fit(
+    train,
+    epochs=15,
+    validation_data=test,
+    validation_steps=n_validation_samples//batch_size,
+    # steps_per_epoch =n_training_samples//batch_size,
+    shuffle = True,
+    callbacks=callbacks_list
+    )
+score, acc = vgg_model.evaluate(test, batch_size=batch_size)                       
+print('Test score:', score)
+print('Test accuracy:', acc)
+vgg_prediction = vgg_model.predict(test_images)
+plt.plot(history.history['accuracy'], label='accuracy')
+plt.plot(history.history['val_accuracy'], label = 'val_accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.ylim([0.5, 1])
+plt.legend(loc='lower right')
+plt.show()
+plot_predection(vgg_model
+y_pred = np.argmax(vgg_prediction, axis=1)
+y_test = np.argmax(test_labels, axis=1)
+print('f1 Score : ',f1_score(y_test, y_pred, average="macro"))
+print('recall  :',   recall_score(y_test,y_pred,average="macro"))
+print('precision ',precision_score(y_test,y_pred,average="macro"))
+vgg_model.save('model.h5')
